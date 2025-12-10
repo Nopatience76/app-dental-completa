@@ -22,7 +22,7 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y \
-          openjdk-11-jdk \
+          openjdk-17-jdk \
           zip \
           unzip \
           git \
@@ -48,8 +48,13 @@ jobs:
         echo "84831b9409646a918e30573bab4c9c91346d8abd" > ~/.android/licenses/android-sdk-preview-license
         echo "d975f751698a77b662f1254ddbeed3901e976f5a" > ~/.android/licenses/intel-android-extra-license
         
-    - name: Build APK
+    - name: Force clean and build
       run: |
+        # Limpiar completamente
+        rm -rf .buildozer 2>/dev/null || true
+        rm -rf bin 2>/dev/null || true
+        
+        # Construir APK
         buildozer -v android debug
         
     - name: Upload APK
