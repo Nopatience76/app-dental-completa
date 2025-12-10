@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # Cambia a ubuntu-22.04
     
     steps:
     - name: Checkout code
@@ -16,50 +16,110 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.9'
+        python-version: '3.10'  # Cambia a 3.10
+        architecture: 'x64'
         
     - name: Install system dependencies
       run: |
         sudo apt-get update
         sudo apt-get install -y \
+          build-essential \
           openjdk-17-jdk \
           zip \
           unzip \
           git \
           python3-pip \
+          python3-dev \
+          python3-venv \
           autoconf \
+          automake \
           libtool \
           pkg-config \
-          zlib1g-dev \
-          libncurses-dev \
+          cmake \
           libffi-dev \
-          libssl-dev
+          libssl-dev \
+          zlib1g-dev \
+          libncurses5-dev \
+          libsqlite3-dev \
+          libreadline-dev \
+          libbz2-dev \
+          libgdbm-dev \
+          liblzma-dev \
+          tk-dev \
+          wget \
+          curl \
+          libjpeg-dev \
+          libpng-dev \
+          libsdl2-dev \
+          libsdl2-image-dev \
+          libsdl2-mixer-dev \
+          libsdl2-ttf-dev
+          
+    - name: Install libtool-bin (específico para Ubuntu 24.04)
+      run: |
+        sudo apt-get install -y libtool-bin
         
     - name: Install Buildozer and dependencies
       run: |
+        python -m pip install --upgrade pip setuptools wheel
         pip install buildozer
         pip install cython==0.29.33
         pip install kivy==2.3.0
         
     - name: Setup Android licenses
       run: |
+        mkdir -p ~/.android
+        touch ~/.android/repositories.cfg
+        
         mkdir -p ~/.android/licenses
-        echo "8933bad161af4178b1185d1a37fbf41ea5269c55" > ~/.android/licenses/android-sdk-license
-        echo "84831b9409646a918e30573bab4c9c91346d8abd" > ~/.android/licenses/android-sdk-preview-license
-        echo "d975f751698a77b662f1254ddbeed3901e976f5a" > ~/.android/licenses/intel-android-extra-license
+        echo -e "\n8933bad161af4178b1185d1a37fbf41ea5269c55" >> ~/.android/licenses/android-sdk-license
+        echo -e "\n84831b9409646a918e30573bab4c9c91346d8abd" >> ~/.android/licenses/android-sdk-preview-license
+        echo -e "\nd975f751698a77b662f1254ddbeed3901e976f5a" >> ~/.android/licenses/intel-android-extra-license
         
-    - name: Force clean and build
+    - name: Configure Buildozer
       run: |
-        # Limpiar completamente
-        rm -rf .buildozer 2>/dev/null || true
-        rm -rf bin 2>/dev/null || true
+        # Crear buildozer.spec si no existe
+        if [ ! -f buildozer.spec ]; then
+          buildozer init
+        fi
         
-        # Construir APK
-        buildozer -v android debug
+        # Actualizar buildozer.spec con configuraciones específicas
+        sed -i '/^android.ndk =/c\android.ndk = 25c' buildozer.spec || true
+        sed -i '/^android.sdk =/c\android.sdk = 34' buildozer.spec || true
+        
+    - name: Build APK
+      run: |
+        # Limpiar builds anteriores
+        rm -rf .buildozer bin
+        
+        # Establecer variables de entorno para libtool
+        export LIBTOOLIZE=libtoolize
+        export LIBTOOL=libtool
+        export AUTOMAKE=automake
+        export AUTOCONF=autoconf
+        
+        # Build con log detallado
+        buildozer -v android debug 2>&1 | tee build.log
+        
+    - name: Check build artifacts
+      run: |
+        ls -la bin/ || echo "No bin directory found"
+        ls -la .buildozer/android/platform/build-* || echo "No build directory found"
         
     - name: Upload APK
+      if: success()
       uses: actions/upload-artifact@v4
       with:
         name: dental-app-apk
         path: bin/*.apk
+        retention-days: 30
+        
+    - name: Upload build log
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs
+        path: |
+          build.log
+          .buildozer/android/platform/*/build.log
         retention-days: 30
